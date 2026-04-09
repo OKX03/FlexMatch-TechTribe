@@ -1,8 +1,8 @@
 <?PHP
     $servername = "localhost";
-    $username = "FlexMatch";
-    $password = "parttimejob2024";
-    $dbname = "flexmatch_db";
+    $username = "root";
+    $password = "";
+    $dbname = "flexmatch";
 
     // Create connection
     $con = mysqli_connect($servername, $username, $password, $dbname);
