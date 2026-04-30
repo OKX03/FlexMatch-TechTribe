@@ -1,30 +1,35 @@
 <?php
-    include('../database/config.php');
+    // Import service classes
+    require_once '../services/DatabaseService.php';
+    require_once '../services/JobPostingService.php';
+    require_once '../services/RatingService.php';
+    
+    // Include header
     include('job_seeker_header.php');
 
-    $sql = "SELECT * FROM jobPost WHERE endDate >= CURDATE()";
-    $result = $con->query($sql);
+    // Initialize services using dependency injection
+    $dbService = new DatabaseService();
+    $jobPostingService = new JobPostingService($dbService);
+    $ratingService = new RatingService($dbService);
     
+    // Get all active jobs using the job posting service
     $jobs = [];
-    if ($result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            $ratingSQL = "SELECT r.rating, r.feedback, js.fullName
-                          FROM jobRating r
-                          JOIN jobHistory h ON r.historyID = h.historyID
-                          JOIN jobSeeker js ON r.userID = js.userID
-                          WHERE h.jobPostID = ?";
-            $stmt = $con->prepare($ratingSQL);
-            $stmt->bind_param("s", $row['jobPostID']);
-            $stmt->execute();
-            $ratingResult = $stmt->get_result();
-            $rating = $ratingResult->fetch_all(MYSQLI_ASSOC);
-
-            $row['rating'] = $rating;
-            $jobs[] = $row;
-        }
+    $activeJobs = $jobPostingService->getActiveJobs();
+    
+    // Enrich job data with ratings
+    foreach ($activeJobs as $job) {
+        $jobPostID = $job['jobPostID'];
+        
+        // Get ratings for this job post
+        $ratings = $ratingService->getRatingsByJobPost($jobPostID);
+        
+        // Add ratings to job data
+        $job['rating'] = $ratings;
+        $jobs[] = $job;
     }
     
-    $con->close();
+    // Close the database connection
+    $dbService->closeConnection();
 ?>
 
 <!DOCTYPE html>

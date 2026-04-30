@@ -17,6 +17,21 @@
 
 <body>
     <?php
+session_start();
+
+
+if (!isset($_SESSION['userID'])) {
+    header('Location: ../login.html');
+    exit();
+}
+
+if ($_SESSION['role'] !== 'employer') {
+    echo "<script>alert('Unauthorized access! You do not have permission to view this page.'); 
+          window.location.href = '../login.html';</script>";
+    exit();
+}
+?>
+    <?php
     include('../database/config.php');
     include('employer_header.php');
 
@@ -44,7 +59,9 @@
             empty($workingHour) || empty($startDate) || empty($endDate) || empty($venue) || 
             empty($workingTimeStart) || empty($workingTimeEnd)) {
             $errorMessage = "All required fields must be filled!";
-        } else {
+        } else if ($salary <= 0) {
+            $errorMessage = "Salary must be a positive value greater than 0!";
+        }else {
         // Query the minimum missing number
             $sql_find_id = "
             SELECT MIN(t1.id + 1) AS missingID
@@ -82,18 +99,19 @@
 
             echo "next jobPostID: " . $nextJobPostID;
 
+            if (empty($errorMessage)) {
+                $sql_insert = "INSERT INTO jobPost (jobPostID, jobTitle, location, salary, startDate, endDate, workingHour, 
+                    jobDescription, jobRequirement, venue, language, race, workingTimeStart, workingTimeEnd, userID)
+                    VALUES ('$nextJobPostID', '$jobTitle', '$location', $salary, '$startDate', '$endDate', '$workingHour', 
+                    '$jobDescription', '$jobRequirement','$venue', '$language', '$race', '$workingTimeStart', '$workingTimeEnd', '$userID')";
 
-            $sql_insert = "INSERT INTO jobPost (jobPostID, jobTitle, location, salary, startDate, endDate, workingHour, 
-                jobDescription, jobRequirement, venue, language, race, workingTimeStart, workingTimeEnd, userID)
-                VALUES ('$nextJobPostID', '$jobTitle', '$location', $salary, '$startDate', '$endDate', '$workingHour', 
-                '$jobDescription', '$jobRequirement','$venue', '$language', '$race', '$workingTimeStart', '$workingTimeEnd', '$userID')";
 
 
-
-            if (mysqli_query($con, $sql_insert)) {
-                $formSubmitted = true;
-            } else {
-                $errorMessage = "Error: " . mysqli_error($con);
+                if (mysqli_query($con, $sql_insert)) {
+                    $formSubmitted = true;
+                } else {
+                    $errorMessage = "Error: " . mysqli_error($con);
+                }
             }
         }
     }
@@ -109,6 +127,12 @@
                 });
             </script>
         <?php else: ?>
+
+        <?php if (!empty($errorMessage)): ?>
+            <div class="alert alert-danger">
+                <?php echo $errorMessage; ?>
+            </div>
+        <?php endif; ?>
             <h2>Create Job Posting</h2>
             <!-- Job Posting Form -->
             <form id="jobPostingForm" action="job_posting_form.php" method="post">
@@ -144,9 +168,11 @@
                 </div>
 
                 <div class="form-group">
-                <label for="salary">Salary per hour (RM)<span class="required">*</span></label>
-                    <input type="number" class="form-control" id="salary" name="salary" required>
-                </div>
+<div class="form-group">
+    <label for="salary">Salary per hour (RM)<span class="required">*</span></label>
+    <input type="number" step="0.01" class="form-control" id="salary" name="salary" 
+           value='' required>
+</div>
 
                 <div class="form-group">
                 <label for="startDate">Start Date<span class="required">*</span></label>
@@ -278,6 +304,61 @@ function updateEndTimeRange() {
 
 // Add form validation
 document.getElementById('jobPostingForm').addEventListener('submit', function (e) {
+
+    const shiftType = document.getElementById('working_hour').value;
+    const startTime = document.getElementById('workingTimeStart').value;
+    const endTime = document.getElementById('workingTimeEnd').value;
+
+    if (shiftType === 'Day Shift') {
+        // Convert times to comparable numbers (e.g., "08:30" becomes 0830)
+        const startVal = parseInt(startTime.replace(':', ''));
+        const endVal = parseInt(endTime.replace(':', ''));
+
+        const dayStartLimit = 0700; // 07:00 AM
+        const dayEndLimit = 1900;   // 07:00 PM
+
+        if (startVal < dayStartLimit || startVal > dayEndLimit || 
+            endVal < dayStartLimit || endVal > dayEndLimit) {
+            
+            e.preventDefault();
+            alert('Day Shift working time must be between 07:00 AM and 07:00 PM.');
+            return;
+        }
+
+        if (startVal >= endVal) {
+            e.preventDefault();
+            alert('Day Shift end time must be later than start time.');
+            return;
+        }
+    } else if (shiftType === 'Night Shift') {
+        const startVal = parseInt(startTime.replace(':', ''));
+        const endVal = parseInt(endTime.replace(':', ''));
+
+        const nightStartLimit1 = 1900; // 07:00 PM
+        const nightEndLimit1 = 2359;   // 11:59 PM
+        const nightStartLimit2 = 0;    // 12:00 AM
+        const nightEndLimit2 = 700;    // 07:00 AM
+
+        const isValidNightShift = 
+            (startVal >= nightStartLimit1 && startVal <= nightEndLimit1 && endVal >= nightStartLimit2 && endVal <= nightEndLimit2) ||
+            (startVal >= nightStartLimit2 && startVal <= nightEndLimit2 && endVal >= nightStartLimit1 && endVal <= nightEndLimit1);
+
+        if (!isValidNightShift) {
+            e.preventDefault();
+            alert('Night Shift working time must be between 07:00 PM and 07:00 AM.');
+            return;
+        }
+    }
+
+    const salaryInput = document.getElementById('salary');
+
+    if (parseFloat(salaryInput.value) <= 0) {
+        e.preventDefault(); 
+        alert('Salary must be a positive value greater than 0!');
+        salaryInput.focus();
+        return;
+    }
+
     const startTimeInput = document.getElementById('workingTimeStart');
     const endTimeInput = document.getElementById('workingTimeEnd');
 
